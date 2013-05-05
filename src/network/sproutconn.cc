@@ -77,6 +77,9 @@ string SproutConnection::recv( void )
     update_queue_estimate();
   }
 
+	// fprintf(stderr, "SPROUT_RCV: Timestamp = %lu PktSz = %lu", timestamp(), 
+	//		packet.data().length());
+
   return packet.data();
 }
 
