@@ -87,11 +87,11 @@ int main( int argc, char *argv[] )
 		int bytes_will_be_sent = std::min( bytes_can_send, bytes_to_send );
 		bool sent = false;
 
-		if(!server){
-			fprintf(stderr, "Bytes can send: %d\n", bytes_can_send);
-			fprintf(stderr, "FrameID: %d, Bytes Left: %d, Bytes Will be sent: %d\n", 
-					rd_frame_count, frame_size[rd_frame_count], bytes_will_be_sent);
-		}
+		// if(!server){
+		// 	fprintf(stderr, "Bytes can send: %d\n", bytes_can_send);
+		// 	fprintf(stderr, "FrameID: %d, Bytes Left: %d, Bytes Will be sent: %d\n", 
+		// 			rd_frame_count, frame_size[rd_frame_count], bytes_will_be_sent);
+		// }
 
 		/* actually send, maybe */
 		while( bytes_will_be_sent > 0 ) {
@@ -136,7 +136,8 @@ int main( int argc, char *argv[] )
 			wait_time = 10;
 		}
 
-		int active_fds = sel.select( wait_time );
+		// fprintf(stderr, "Before: %lu\n", timestamp());
+		int active_fds = sel.select( 0 /* wait_time */ );
 		if ( active_fds < 0 ) {
 			perror( "select" );
 			exit( 1 );
@@ -165,5 +166,6 @@ int main( int argc, char *argv[] )
 				} 
 			}
 		}
+		// fprintf(stderr, "After: %lu\n", timestamp());
 	}
 }

@@ -67,11 +67,12 @@ int main(){
 		}
 
 		// Sleep to simulate a 60fps frame rate
+		// usleep(33333);
 		usleep(16666);
 
 		++ncount;
-		cout << "ncount: " << ncount << endl;
-		if(ncount == nframes) break;
+		// cout << "ncount: " << ncount << endl;
+		// if(ncount == nframes) break;
 	}
 
 	// Clean up!

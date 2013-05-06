@@ -77,8 +77,8 @@ string SproutConnection::recv( void )
     update_queue_estimate();
   }
 
-	// fprintf(stderr, "SPROUT_RCV: Timestamp = %lu PktSz = %lu", timestamp(), 
-	//		packet.data().length());
+	// fprintf(stderr, "SPROUT_RCV: Timestamp = %lu PktSz = %lu\n", timestamp(), 
+	// 		packet.data().length());
 
   return packet.data();
 }
@@ -108,14 +108,14 @@ int SproutConnection::window_size( void )
     bytes_to_send = 0;
   }
 
-  /*
-  if ( bytes_to_send > 0 ) {
-    fprintf( stderr, "From tick %d(%d) => %d(%d), %d bytes to send with %d already sent\n",
-	     current_forecast_tick, operative_forecast.counts( current_forecast_tick ),
-	     cumulative_delivery_tick, operative_forecast.counts( cumulative_delivery_tick ),
-	     bytes_to_send, current_queue_bytes_estimate );
-  }
-  */
+  
+  // if ( bytes_to_send > 0 ) {
+  //   fprintf( stderr, "SPROUT_F: From tick %d(%d) => %d(%d), %d bytes to send with %d already sent\n",
+	//      current_forecast_tick, operative_forecast.counts( current_forecast_tick ),
+	//      cumulative_delivery_tick, operative_forecast.counts( cumulative_delivery_tick ),
+	//      bytes_to_send, current_queue_bytes_estimate );
+  // }
+  
 
   return bytes_to_send;
 }
