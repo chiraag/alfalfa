@@ -50,6 +50,9 @@ int main(){
 		return EXIT_FAILURE;
 	}
 
+	// Sleep initially to allow sender setup
+	sleep(3);
+
 	int ncount = 0;
 	while(true){
 		unsigned char data[4] = {0};

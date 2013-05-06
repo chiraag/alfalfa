@@ -87,6 +87,12 @@ int main( int argc, char *argv[] )
 		int bytes_will_be_sent = std::min( bytes_can_send, bytes_to_send );
 		bool sent = false;
 
+		if(!server){
+			fprintf(stderr, "Bytes can send: %d\n", bytes_can_send);
+			fprintf(stderr, "FrameID: %d, Bytes Left: %d, Bytes Will be sent: %d\n", 
+					rd_frame_count, frame_size[rd_frame_count], bytes_will_be_sent);
+		}
+
 		/* actually send, maybe */
 		while( bytes_will_be_sent > 0 ) {
 			int this_packet_size = std::min( 1440, bytes_will_be_sent );
@@ -106,11 +112,12 @@ int main( int argc, char *argv[] )
 
 			if(frame_size[rd_frame_count] == 0){
 				++rd_frame_count;
-				fprintf(stderr, "Done with frame %d", rd_frame_count-1);
+				fprintf(stderr, "Done sending frame %d at %lu\n", rd_frame_count-1, 
+						timestamp());
 			}
 		}
 
-		if((!sent) && (time_of_next_transmission <= timestamp())){
+		if( (!sent) && (time_of_next_transmission <= timestamp()) ){
 			net->send( "", fallback_interval );
 			sent = true;
 		}
@@ -140,19 +147,23 @@ int main( int argc, char *argv[] )
 			string packet( net->recv() );
 		}
 
-		/* setup next frame */	
-		if(sel.read(npipe)){
-			unsigned char data[4];
-			int ndata = read(npipe, data, 4);
-			if( ndata < 0){
-				perror("read");
-			} else if ( ndata > 0 ){
-				unsigned int nxt_frame_size = 
-					(data[3] << 24) + (data[2] << 14) + (data[1] << 8) + data[0]; 
-				frame_size[wr_frame_count] = nxt_frame_size;
-				++wr_frame_count;
-				// cout << "Frame[" << frame_count << "]: " << frame_size << endl;
-			} 
+		/* setup next frame */
+		if(!server){
+			if(sel.read(npipe)){
+				unsigned char data[4];
+				int ndata = read(npipe, data, 4);
+				if( ndata < 0){
+					perror("read");
+				} else if ( ndata > 0 ){
+					unsigned int nxt_frame_size = 
+						(data[3] << 24) + (data[2] << 14) + (data[1] << 8) + data[0]; 
+					frame_size[wr_frame_count] = nxt_frame_size;
+					++wr_frame_count;
+					fprintf(stderr, "Done reading in frame %d at %lu\n", wr_frame_count-1, 
+							timestamp());
+					// cout << "Frame[" << frame_count << "]: " << frame_size << endl;
+				} 
+			}
 		}
 	}
 }
