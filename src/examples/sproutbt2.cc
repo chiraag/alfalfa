@@ -114,6 +114,8 @@ int main( int argc, char *argv[] )
 				++rd_frame_count;
 				fprintf(stderr, "Done sending frame %d at %lu\n", rd_frame_count-1, 
 						timestamp());
+				double rate_next = net->coarse_rate();
+				fprintf(stderr, "Coarse Rate Estimate: %g\n", rate_next);	
 			}
 		}
 
@@ -160,8 +162,8 @@ int main( int argc, char *argv[] )
 						(data[3] << 24) + (data[2] << 14) + (data[1] << 8) + data[0]; 
 					frame_size[wr_frame_count] = nxt_frame_size;
 					++wr_frame_count;
-					fprintf(stderr, "Done reading in frame %d at %lu\n", wr_frame_count-1, 
-							timestamp());
+					fprintf(stderr, "Done reading in frame %d [%d bytes] at %lu\n", 
+							wr_frame_count-1, nxt_frame_size, timestamp());
 					// cout << "Frame[" << frame_count << "]: " << frame_size << endl;
 				} 
 			}

@@ -59,11 +59,14 @@ int main(){
 		for(int i=0; i<4; i++){
 			data[i] = (frame_size[ncount] >> (8*i)) & 0xff;
 		}
-		int ndata = write(npipe, data, 4);
-		if( ndata < 0){
-			perror("write");
-		} else if ( ndata == 0 ){
-			perror("Empty Write!");
+
+		if(ncount < nframes) {
+			int ndata = write(npipe, data, 4);
+			if( ndata < 0){
+				perror("write");
+			} else if ( ndata == 0 ){
+				perror("Empty Write!");
+			}
 		}
 
 		// Sleep to simulate a 60fps frame rate
