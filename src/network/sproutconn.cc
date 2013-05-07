@@ -106,11 +106,12 @@ string SproutConnection::recv( void )
 		int bytes_to_send = cumulative_delivery_forecast 
 			- current_queue_bytes_estimate;
 
-		fprintf(stderr, "\t QSZ:%d (%d) SND:%d\n", 
+		fprintf(stderr, "\t QSZ:%d (%d) SND:%d\t", 
 				current_queue_bytes_estimate, diff_queue_bytes_estimate, 
 				bytes_to_send);
-	}
+	} 
 
+	fprintf(stderr, "LEN:%lu\n", packet.data().length());
 	return packet.data();
 }
 
