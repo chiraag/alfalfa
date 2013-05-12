@@ -52,4 +52,14 @@ int swrite( int fd, const char *str, ssize_t len )
   }
 
   return 0;
-}
+};
+
+void write_message_to_pipe(int npipe, const char *str, ssize_t len)
+{
+	char * len_str = new char[sizeof(len)];
+	memcpy(len_str, (char *)&len, sizeof(len));
+	swrite(npipe, len_str, sizeof(len));
+	swrite(npipe, str, len);
+	delete[] len_str;
+};
+

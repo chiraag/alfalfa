@@ -1,0 +1,18 @@
+option optimize_for = LITE_RUNTIME;
+
+package Encoder;
+
+message E2SControl {
+  optional bool req_forecast = 1;
+}
+
+message S2EControl {
+	optional bool do_encode = 1;
+  optional int32 forecast_byte = 2;
+}
+
+message E2SData {
+  optional int32 frame_size = 1;
+	optional string frame_data = 2;
+}
+

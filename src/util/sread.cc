@@ -30,10 +30,42 @@
     also delete it here.
 */
 
-#ifndef SWRITE_HPP
-#define SWRITE_HPP
+#include <unistd.h>
+#include <string.h>
+#include <stdio.h>
 
-int swrite( int fd, const char *str, ssize_t len = -1 );
-void write_message_to_pipe(int npipe, const char *str, ssize_t len);
+#include "sread.h"
 
-#endif
+int sread( int fd, char *str, ssize_t bytes_to_read )
+{
+  ssize_t total_bytes_read = 0;
+  while ( total_bytes_read < bytes_to_read ) {
+    ssize_t bytes_read = read( fd, str + total_bytes_read,
+				   bytes_to_read - total_bytes_read );
+    if ( bytes_read <= 0 ) {
+      perror( "read" );
+      return -1;
+    } else {
+      total_bytes_read += bytes_read;
+    }
+  }
+
+  return 0;
+};
+
+ssize_t read_length_from_pipe(int npipe)
+{
+	ssize_t length;
+	char * len_str = new char[sizeof(length)];
+	sread(npipe, len_str, sizeof(length));
+	memcpy((char *)&length, len_str, sizeof(length));
+	delete[] len_str;
+
+	return length;
+};
+
+void read_message_from_pipe(int npipe, char * message, ssize_t len)
+{
+	sread(npipe, message, len);
+};
+

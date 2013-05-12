@@ -1,22 +1,25 @@
 #include<iostream>
-#include<fstream>
-#include<cstdio>
-#include<fcntl.h>
-#include<unistd.h>
+#include "select.h"
+#include"enc-utils.h"
 
-#include<cstdlib>
-#include<sys/types.h>
-#include<sys/stat.h>
-#include<cerrno>
+// #define TFRAME 33333
+#define TFRAME 16666
 
 using namespace std;
+
+inline uint64_t wait_time(struct timeval begin, struct timeval end, 
+		uint64_t max_time){
+	uint64_t diff_time = (end.tv_sec*100000 + end.tv_usec)
+		- (begin.tv_sec*100000 + begin.tv_usec);
+	return max((max_time-diff_time), (uint64_t)0);
+};
 
 int main(){
 	cout << "Dummy encoder to run with sprout!" << endl;
 
+	GOOGLE_PROTOBUF_VERIFY_VERSION;
+
 	// Read the frame information from log file
-	// fstream fin;
-	// fin.open("frame_size.log", fstream::in);
 	int nframes;
 	cin >> nframes;
 	cout << "Frame count: " << nframes << endl;
@@ -26,62 +29,56 @@ int main(){
 		// cout << "Frame[" << i << "]: " << frame_size[i] << endl;
 	}
 
-	// Open a new named pipe if there is none yet
-	struct stat pipe_status;
-	int stat_err = stat("/tmp/nfifo", &pipe_status);
-	if( stat_err < 0 ){
-		if( errno == ENOENT ){
-			// cout << "Fifo does not exist yet! Trying to create one" << endl;
-			int efifo = mkfifo("/tmp/nfifo", S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-			if(efifo < 0){
-				perror("mkfifo");
-				return EXIT_FAILURE;
-			}
-			cout << "Opened a new fifo at /tmp/nfifo" << endl;
-		} else {
-			perror("stat");
-		}
-	}
+	// Return FDs to named-pipes (create not existing)
+	int e2sd_pipe = create_pipe("/tmp/e2sd", O_WRONLY);
+	int e2sc_pipe = create_pipe("/tmp/e2sc", O_WRONLY);
+	int s2ec_pipe = create_pipe("/tmp/s2ec", O_RDONLY);
 
-	// Open a new file descriptor to the named pipe
-	int npipe = open("/tmp/nfifo", O_WRONLY);
-	if(npipe < 0){
-		perror("open");
-		return EXIT_FAILURE;
-	}
+	Select &sel = Select::get_instance();
+	sel.add_fd(s2ec_pipe);
 
 	// Sleep initially to allow sender setup
 	sleep(3);
 
 	int ncount = 0;
 	while(true){
-		unsigned char data[4] = {0};
-		for(int i=0; i<4; i++){
-			data[i] = (frame_size[ncount] >> (8*i)) & 0xff;
-		}
-
+		struct timeval begin, end;
+		gettimeofday(&begin, NULL);
 		if(ncount < nframes) {
-			int ndata = write(npipe, data, 4);
-			if( ndata < 0){
-				perror("write");
-			} else if ( ndata == 0 ){
-				perror("Empty Write!");
+			Encoder::E2SControl control_req;
+			control_req.set_req_forecast(true);
+			write_message<Encoder::E2SControl>(e2sc_pipe, control_req);
+
+			int active_fds = sel.select( int(0.5*TFRAME/1000.0) );
+			if ( active_fds < 0 ) {
+				perror( "select" );
+				exit( 1 );
 			}
+
+			if(sel.read(s2ec_pipe)){
+				Encoder::S2EControl control_resp = 
+					read_message<Encoder::S2EControl>(s2ec_pipe);
+				bool do_encode = control_resp.do_encode();
+				int forecast = control_resp.forecast_byte();
+				cout << "Forecast: Frame " << ncount << " - [" << forecast 
+					<< "bytes] [" << (do_encode?'Y':'N') << "]" << endl; 
+			}
+
+			Encoder::E2SData frame_data;
+			frame_data.set_frame_size(frame_size[ncount]);
+			write_message<Encoder::E2SData>(e2sd_pipe, frame_data);
 		}
+		gettimeofday(&end, NULL);
 
-		// Sleep to simulate a 60fps frame rate
-		// usleep(33333);
-		usleep(16666);
-
+		// Sleep to simulate uniform frame rate
+		usleep(wait_time(begin, end, TFRAME));
 		++ncount;
-		// cout << "ncount: " << ncount << endl;
-		// if(ncount == nframes) break;
 	}
 
 	// Clean up!
-	// fin.close();
-	close(npipe);
-	unlink("/tmp/nfifo");
+	close(e2sd_pipe);	unlink("/tmp/e2sd");
+	close(e2sc_pipe);	unlink("/tmp/e2sc");
+	close(s2ec_pipe);	unlink("/tmp/s2ec");
 
 	cout << "Succesful exit for dummy encoder. Bye!" << endl;
 	return EXIT_SUCCESS;

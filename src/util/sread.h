@@ -30,10 +30,12 @@
     also delete it here.
 */
 
-#ifndef SWRITE_HPP
-#define SWRITE_HPP
+#ifndef SREAD_HPP
+#define SREAD_HPP
 
-int swrite( int fd, const char *str, ssize_t len = -1 );
-void write_message_to_pipe(int npipe, const char *str, ssize_t len);
+int sread( int fd, char *str, ssize_t bytes_to_read );
+ssize_t read_length_from_pipe(int npipe);
+void read_message_from_pipe(int npipe, char * message, ssize_t len);
+
 
 #endif

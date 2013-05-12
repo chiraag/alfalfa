@@ -10,6 +10,8 @@
 #include "sproutconn.h"
 #include "select.h"
 
+#include "enc-utils.h"
+
 #define MAX_FRAMES 60000 // 1000s of video at 60fps
 
 using namespace std;
@@ -17,6 +19,8 @@ using namespace Network;
 
 int main( int argc, char *argv[] )
 {
+	GOOGLE_PROTOBUF_VERIFY_VERSION;
+
 	char *ip;
 	int port;
 
@@ -46,12 +50,19 @@ int main( int argc, char *argv[] )
 
 	Select &sel = Select::get_instance();
 	sel.add_fd( net->fd() );
-	int npipe = -1;
+	int e2sd_pipe = -1, e2sc_pipe = -1, s2ec_pipe = -1;
 	do{
-		npipe = open("/tmp/nfifo", O_RDONLY);
-	} while( npipe < 0 );
-	sel.add_fd(npipe);
-	// cout << "FIFO available for read" << endl;
+		close(e2sd_pipe);
+		close(e2sc_pipe);
+		close(s2ec_pipe);
+
+		e2sd_pipe = open("/tmp/e2sd", O_RDONLY);
+		e2sc_pipe = open("/tmp/e2sc", O_RDONLY);
+		s2ec_pipe = open("/tmp/s2ec", O_WRONLY);
+	} while( (e2sd_pipe < 0) || (e2sc_pipe < 0) || (s2ec_pipe < 0) );
+	sel.add_fd(e2sd_pipe);
+	sel.add_fd(e2sc_pipe);
+	// std::cout << "FIFO available for read" << std::endl;
 
 	const int fallback_interval = 50;
 
@@ -87,7 +98,7 @@ int main( int argc, char *argv[] )
 			string garbage( this_packet_size+5, 'x' );
 			char frame_count_str[6];
 			sprintf(frame_count_str, "%05d", rd_frame_count);
-			fprintf(stderr, "DEBUG: Frame No: %s => %d\n", frame_count_str, rd_frame_count);
+			// fprintf(stderr, "DEBUG: Frame No: %s => %d\n", frame_count_str, rd_frame_count);
 			for(int i=0;i<5;i++){
 				garbage[i]=frame_count_str[i];
 			}
@@ -103,8 +114,6 @@ int main( int argc, char *argv[] )
 				++rd_frame_count;
 				fprintf(stderr, "Done sending frame %d at %lu\n", rd_frame_count-1, 
 						timestamp());
-				double rate_next = net->coarse_rate();
-				fprintf(stderr, "Coarse Rate Estimate: %g\n", rate_next);	
 			}
 		}
 
@@ -116,15 +125,6 @@ int main( int argc, char *argv[] )
 		if(sent){
 			time_of_next_transmission = std::max( timestamp() + fallback_interval,
 					time_of_next_transmission );
-		}
-
-
-		/* wait */
-		int wait_time = time_of_next_transmission - timestamp();
-		if ( wait_time < 0 ) {
-			wait_time = 0;
-		} else if ( wait_time > 10 ) {
-			wait_time = 10;
 		}
 
 		// fprintf(stderr, "Before: %lu\n", timestamp());
@@ -139,21 +139,28 @@ int main( int argc, char *argv[] )
 			string packet( net->recv() );
 		}
 
+		if(sel.read(e2sc_pipe)){
+			fprintf(stderr, "Control Recv\n");
+			Encoder::E2SControl control_req = 
+				read_message<Encoder::E2SControl>(e2sc_pipe);
+			if(control_req.req_forecast()){
+				double rate = net->coarse_rate();
+				int forecast = rate/8.0*16.66;
+				Encoder::S2EControl control_resp;
+				control_resp.set_do_encode(true);
+				control_resp.set_forecast_byte(forecast);
+				write_message<Encoder::S2EControl>(s2ec_pipe, control_resp);
+			}
+		}
+
 		/* setup next frame */
-		if(sel.read(npipe)){
-			unsigned char data[4];
-			int ndata = read(npipe, data, 4);
-			if( ndata < 0){
-				perror("read");
-			} else if ( ndata > 0 ){
-				unsigned int nxt_frame_size = 
-					(data[3] << 24) + (data[2] << 14) + (data[1] << 8) + data[0]; 
-				frame_size[wr_frame_count] = nxt_frame_size;
-				++wr_frame_count;
-				fprintf(stderr, "Done reading in frame %d [%d bytes] at %lu\n", 
-						wr_frame_count-1, nxt_frame_size, timestamp());
-				// cout << "Frame[" << frame_count << "]: " << frame_size << endl;
-			} 
+		if(sel.read(e2sd_pipe)){
+			Encoder::E2SData frame_data = 
+				read_message<Encoder::E2SData>(e2sd_pipe);
+			frame_size[wr_frame_count] = frame_data.frame_size();
+			++wr_frame_count;
+			fprintf(stderr, "Done reading in frame %d [%d bytes] at %lu\n", 
+					wr_frame_count-1, frame_size[wr_frame_count-1], timestamp());
 		}
 		// fprintf(stderr, "After: %lu\n", timestamp());
 	}
