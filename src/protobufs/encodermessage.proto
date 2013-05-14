@@ -9,6 +9,7 @@ message E2SControl {
 message S2EControl {
 	optional bool do_encode = 1;
   optional int32 forecast_byte = 2;
+	repeated int32 lost_frames = 3;
 }
 
 message E2SData {
@@ -16,3 +17,8 @@ message E2SData {
 	optional string frame_data = 2;
 }
 
+message ACK {
+	optional int32 curr_frame = 1;
+	optional int32 curr_bytes = 2;
+	optional uint64 timestamp = 3;
+}

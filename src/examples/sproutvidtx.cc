@@ -67,7 +67,16 @@ int main( int argc, char *argv[] )
 	const int fallback_interval = 50;
 
 	uint64_t time_of_next_transmission = timestamp() + fallback_interval;
-	int frame_size[MAX_FRAMES] = {-1};
+	int frame_size[MAX_FRAMES];
+	std::fill_n(frame_size, MAX_FRAMES, -1);
+	uint64_t read_time[MAX_FRAMES];
+	std::fill_n(read_time, MAX_FRAMES, 0);
+	int curr_frame_left = -1;
+
+	bool frame_acked[MAX_FRAMES] = {false};
+	int last_lost = -1;
+	int last_acked = -1;
+
 	int rd_frame_count = 0;
 	int wr_frame_count = 0;
 
@@ -76,7 +85,14 @@ int main( int argc, char *argv[] )
 	/* loop */
 	while ( 1 ) {
 		int bytes_can_send = net->window_size();
-		int bytes_to_send = std::max(0, frame_size[rd_frame_count]);
+		if((curr_frame_left == -1) && (frame_size[rd_frame_count] >= 0)){
+			curr_frame_left = frame_size[rd_frame_count];
+		}
+		int outstanding_bytes = curr_frame_left;
+		// for(int i=rd_frame_count+1;i<wr_frame_count;i++){
+		// 	outstanding_bytes += frame_size[i];
+		// }
+		int bytes_to_send = std::max(0, outstanding_bytes);
 		int bytes_will_be_sent = std::min( bytes_can_send, bytes_to_send );
 		bool sent = false;
 
@@ -89,11 +105,14 @@ int main( int argc, char *argv[] )
 		/* actually send, maybe */
 		while( bytes_will_be_sent > 0 ) {
 			int this_packet_size = std::min( 1435, bytes_will_be_sent );
+			this_packet_size = std::min( curr_frame_left, this_packet_size );
 			bytes_will_be_sent -= this_packet_size;
-			frame_size[rd_frame_count] -= this_packet_size;
-			bytes_to_send -= this_packet_size;
-			bytes_can_send -= this_packet_size;
+			curr_frame_left -= this_packet_size;
 			assert( bytes_will_be_sent >= 0 );
+			assert( curr_frame_left >= 0 );
+			fprintf(stderr, "SEND [%lu]: FRAME %d [%d/%d]\n", timestamp(), 
+					rd_frame_count, frame_size[rd_frame_count]-curr_frame_left, 
+					frame_size[rd_frame_count]);
 
 			string garbage( this_packet_size+5, 'x' );
 			char frame_count_str[6];
@@ -110,10 +129,11 @@ int main( int argc, char *argv[] )
 			net->send( garbage, time_to_next );
 			sent = true;
 
-			if(frame_size[rd_frame_count] == 0){
+			if(curr_frame_left == 0){
+				curr_frame_left = frame_size[rd_frame_count+1];
+				fprintf(stderr, "SENT [%lu]: FRAME %d\n", timestamp(), 
+						rd_frame_count);
 				++rd_frame_count;
-				fprintf(stderr, "Done sending frame %d at %lu\n", rd_frame_count-1, 
-						timestamp());
 			}
 		}
 
@@ -137,19 +157,53 @@ int main( int argc, char *argv[] )
 		/* receive */
 		if ( sel.read( net->fd() ) ) {
 			string packet( net->recv() );
+			if(packet.length() != 0) {
+				Encoder::ACK ack_message;
+				ack_message.ParseFromString(packet);
+
+				// fprintf(stderr, "ACK [%lu]: CURR %d [%d/%d]\n", 
+				// 		timestamp(), 
+				// 		ack_message.curr_frame(), ack_message.curr_bytes(),
+				// 		frame_size[ack_message.curr_frame()] );
+
+				if(!frame_acked[ack_message.curr_frame()] && 
+						(ack_message.curr_bytes() == frame_size[ack_message.curr_frame()]) ){
+					if(ack_message.curr_frame() > last_acked){
+						frame_acked[ack_message.curr_frame()] = true;
+						last_acked = std::max(last_acked, ack_message.curr_frame());
+						fprintf(stderr, "LAT [%lu]: FRAME %d [%lu ms]\n", 
+								timestamp(), ack_message.curr_frame(), 
+								ack_message.timestamp()-read_time[ack_message.curr_frame()] ); 
+					}
+				}
+			}
 		}
 
 		if(sel.read(e2sc_pipe)){
-			fprintf(stderr, "Control Recv\n");
 			Encoder::E2SControl control_req = 
 				read_message<Encoder::E2SControl>(e2sc_pipe);
 			if(control_req.req_forecast()){
 				double rate = net->coarse_rate();
-				int forecast = rate/8.0*16.66;
+				int forecast = rate*33.33;
+				int outstanding = curr_frame_left;
+				for(int i=rd_frame_count+1;i<wr_frame_count;i++){
+					outstanding += frame_size[i];
+				}
+				bool will_drain = (wr_frame_count <= rd_frame_count+2) || 
+					(outstanding < 2*forecast);
 				Encoder::S2EControl control_resp;
-				control_resp.set_do_encode(true);
+				control_resp.set_do_encode(will_drain);
 				control_resp.set_forecast_byte(forecast);
+				while(last_lost < last_acked){
+					++last_lost;
+					if(!frame_acked[last_lost]){
+						control_resp.add_lost_frames(last_lost);
+					}
+				}
 				write_message<Encoder::S2EControl>(s2ec_pipe, control_resp);
+				fprintf(stderr, "FBCK [%lu]: RATE %d [%c]\n", 
+						timestamp(), forecast, 
+						will_drain?'Y':'N' );
 			}
 		}
 
@@ -158,9 +212,11 @@ int main( int argc, char *argv[] )
 			Encoder::E2SData frame_data = 
 				read_message<Encoder::E2SData>(e2sd_pipe);
 			frame_size[wr_frame_count] = frame_data.frame_size();
+			read_time[wr_frame_count] = timestamp();
+			fprintf(stderr, "READ [%lu]: FRAME %d [%d B]\n", 
+					read_time[wr_frame_count], wr_frame_count, 
+					frame_size[wr_frame_count] );
 			++wr_frame_count;
-			fprintf(stderr, "Done reading in frame %d [%d bytes] at %lu\n", 
-					wr_frame_count-1, frame_size[wr_frame_count-1], timestamp());
 		}
 		// fprintf(stderr, "After: %lu\n", timestamp());
 	}

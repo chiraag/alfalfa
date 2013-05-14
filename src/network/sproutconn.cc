@@ -56,10 +56,10 @@ void SproutConnection::send( const string & s, uint16_t time_to_next )
 			- operative_forecast.counts(current_forecast_tick ));
 	int bytes_to_send = cumulative_delivery_forecast 
 		- current_queue_bytes_estimate;
-	fprintf(stderr, "SPROUT_SND: Timestamp = %lu ->\t", timestamp());
-	fprintf(stderr, "\t QSZ:%d (%lu) SND:%d\n", 
-			current_queue_bytes_estimate, outgoing.size(), 
-			bytes_to_send);
+	// fprintf(stderr, "SPROUT_SND: Timestamp = %lu ->\t", timestamp());
+	// fprintf(stderr, "\t QSZ:%d (%lu) SND:%d\n", 
+	// 		current_queue_bytes_estimate, outgoing.size(), 
+	// 		bytes_to_send);
 }
 
 void SproutConnection::update_queue_estimate( void )
@@ -81,7 +81,7 @@ string SproutConnection::recv( void )
 {
 	ForecastPacket packet( conn.recv() );
 
-	fprintf(stderr, "SPROUT_RCV: Timestamp = %lu <-\t", timestamp());
+	// fprintf(stderr, "SPROUT_RCV: Timestamp = %lu <-\t", timestamp());
 
 	int old_queue_bytes_estimate = current_queue_bytes_estimate;
 
@@ -106,12 +106,12 @@ string SproutConnection::recv( void )
 		int bytes_to_send = cumulative_delivery_forecast 
 			- current_queue_bytes_estimate;
 
-		fprintf(stderr, "\t QSZ:%d (%d) SND:%d\t", 
-				current_queue_bytes_estimate, diff_queue_bytes_estimate, 
-				bytes_to_send);
+		// fprintf(stderr, "\t QSZ:%d (%d) SND:%d\t", 
+		// 		current_queue_bytes_estimate, diff_queue_bytes_estimate, 
+		// 		bytes_to_send);
 	} 
 
-	fprintf(stderr, "LEN:%lu\n", packet.data().length());
+	// fprintf(stderr, "LEN:%lu\n", packet.data().length());
 	return packet.data();
 }
 
@@ -154,10 +154,13 @@ int SproutConnection::window_size( void )
 
 double SproutConnection::coarse_rate( void )
 {
-	int num_ticks = operative_forecast.counts_size();
-	int avg_pkts = (operative_forecast.counts(num_ticks-1)-operative_forecast.counts(0)); 
-	return (double)(1440.0 * 8.0 * avg_pkts)/
-		(double)(num_ticks * get_tick_length());
+	double num_ticks = operative_forecast.counts_size();
+	double avg_pkts = (operative_forecast.counts(num_ticks-1)-operative_forecast.counts(0)); 
+
+	double rate = (1440.0 * avg_pkts)/(num_ticks * get_tick_length());
+	fprintf(stderr, "Debug 1440.0*%g/%g*%d=%g\n", avg_pkts, num_ticks, 
+			get_tick_length(), rate);
+	return rate;
 }
 
 void SproutConnection::queue_to_send( const string & s, uint16_t time_to_next )

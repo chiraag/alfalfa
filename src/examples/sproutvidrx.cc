@@ -10,6 +10,8 @@
 #include "sproutconn.h"
 #include "select.h"
 
+#include "enc-utils.h"
+
 #define MAX_FRAMES 60000 // 1000s of video at 60fps
 
 using namespace std;
@@ -64,6 +66,11 @@ int main( int argc, char *argv[] )
 	int frame_size[MAX_FRAMES] = {0};
 	int rx_frame_count = 0;
 
+	bool send_ack = false;
+	Encoder::ACK ack_message;
+	ack_message.set_curr_frame(0);
+	ack_message.set_curr_bytes(frame_size[0]);
+
 	fprintf( stderr, "Looping...\n" );  
 
 	/* loop */
@@ -71,8 +78,11 @@ int main( int argc, char *argv[] )
 		bool sent = false;
 
 		/* actually send, maybe */
-		if( (!sent) && (time_of_next_transmission <= timestamp()) ){
-			net->send( "", fallback_interval );
+		if( send_ack || (time_of_next_transmission <= timestamp()) ){
+			string ack_message_str;
+			ack_message.SerializeToString(&ack_message_str);
+			net->send( ack_message_str, fallback_interval );
+			if(send_ack) send_ack = false;
 			sent = true;
 		}
 
@@ -108,6 +118,11 @@ int main( int argc, char *argv[] )
 				int frame_count = stoi(frame_count_str);
 				// fprintf(stderr, "DEBUG: Frame No: %s => %d\n", frame_count_str, frame_count);
 				frame_size[frame_count] += packet.length()-5;
+				ack_message.set_curr_frame(frame_count);
+				ack_message.set_curr_bytes(frame_size[frame_count]);
+				ack_message.set_timestamp(timestamp());
+				send_ack = true;
+
 				while(rx_frame_count < frame_count){
 					fprintf(stderr, "Recvd frame %d [%d bytes] recvd at %lu\n", 
 							rx_frame_count, frame_size[rx_frame_count], last_rx);

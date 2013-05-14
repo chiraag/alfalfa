@@ -2,8 +2,8 @@
 #include "select.h"
 #include"enc-utils.h"
 
-// #define TFRAME 33333
-#define TFRAME 16666
+#define TFRAME 33333
+// #define TFRAME 16666
 
 using namespace std;
 
@@ -41,6 +41,8 @@ int main(){
 	sleep(3);
 
 	int ncount = 0;
+	bool do_encode = true;
+	int forecast = 0;
 	while(true){
 		struct timeval begin, end;
 		gettimeofday(&begin, NULL);
@@ -58,15 +60,21 @@ int main(){
 			if(sel.read(s2ec_pipe)){
 				Encoder::S2EControl control_resp = 
 					read_message<Encoder::S2EControl>(s2ec_pipe);
-				bool do_encode = control_resp.do_encode();
-				int forecast = control_resp.forecast_byte();
+				do_encode = control_resp.do_encode();
+				forecast = control_resp.forecast_byte();
 				cout << "Forecast: Frame " << ncount << " - [" << forecast 
-					<< "bytes] [" << (do_encode?'Y':'N') << "]" << endl; 
+					<< "bytes] [" << (do_encode?'Y':'N') << "]" << endl;
+				for(int i=0;i<control_resp.lost_frames_size();i++){
+					cout << "Lost Frame: " << control_resp.lost_frames(i) << endl;
+				}
 			}
 
-			Encoder::E2SData frame_data;
-			frame_data.set_frame_size(frame_size[ncount]);
-			write_message<Encoder::E2SData>(e2sd_pipe, frame_data);
+			if(do_encode){
+			// if(true){
+				Encoder::E2SData frame_data;
+				frame_data.set_frame_size(frame_size[ncount]);
+				write_message<Encoder::E2SData>(e2sd_pipe, frame_data);
+			}
 		}
 		gettimeofday(&end, NULL);
 
