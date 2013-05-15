@@ -117,6 +117,17 @@ int SproutConnection::window_size( void )
   return bytes_to_send;
 }
 
+double SproutConnection::coarse_rate( void )
+{
+	double num_ticks = operative_forecast.counts_size();
+	double avg_pkts = (operative_forecast.counts(num_ticks-1)-operative_forecast.counts(0)); 
+
+	double rate = (1440.0 * avg_pkts)/(num_ticks * get_tick_length());
+	// fprintf(stderr, "Debug 1440.0*%g/%g*%d=%g\n", avg_pkts, num_ticks, 
+	// 		get_tick_length(), rate);
+	return rate;
+}
+
 void SproutConnection::queue_to_send( const string & s, uint16_t time_to_next )
 {
   outgoing_queue.push_back( make_pair( s, time_to_next ) );
